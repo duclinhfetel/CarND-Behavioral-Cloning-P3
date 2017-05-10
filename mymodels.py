@@ -7,10 +7,12 @@ from keras.layers.core import Dense, Activation, Flatten, Dropout, Lambda, Spati
 from keras.layers.convolutional import Convolution2D, Cropping2D, Conv2D
 from keras.layers.pooling import MaxPooling2D,AveragePooling2D
 from sklearn.utils import shuffle
+from keras.callbacks import ModelCheckpoint
 
-
+#path_file = 'C:/Users/linhnd16/Desktop/RecordData/driving_log.csv'
+path_file = './data_thanh_ok/driving_log.csv'
 samples = []
-with open('./data/driving_log.csv') as csvfile:
+with open(path_file) as csvfile:
     reader = csv.DictReader(csvfile)
     for line in reader:
         steering = float(line["steering"])
@@ -36,7 +38,7 @@ train_samples, validation_samples = train_test_split(samples, test_size=0.2)
 import cv2
 import numpy as np
 import sklearn
-
+name_module_save = "./finalModule.h5"
 
 def generator(samples, batch_size=32):
     num_samples = len(samples)
@@ -47,7 +49,7 @@ def generator(samples, batch_size=32):
             images = []
             angles = []
             for batch_sample in batch_samples:
-                name = 'data/IMG/'+batch_sample[0].split('/')[-1]
+                name = './data_thanh_ok/IMG/' + batch_sample[0].split('\\')[-1] #batch_sample[0]#
                 center_image = cv2.imread(name)
                 center_angle = batch_sample[1]
                 if batch_sample[2] == True:
@@ -68,77 +70,61 @@ def resize_images(img):
    import tensorflow as tf
    return tf.image.resize_images(img, (160, 200), tf.image.ResizeMethod.AREA)
 
-if os.path.isfile("./modelmap2.h5"):
+if os.path.isfile(name_module_save):
    print()
+   print("load model: ", name_module_save)
    print("continue training ...")
-   model = load_model("./modelmap2.h5")
+   checkpoint = ModelCheckpoint('model-{epoch:03d}.h5',
+                                 monitor='val_loss',
+                                 verbose=0,
+                                 save_best_only=False,
+                                 mode='auto') 
+   
+   model = load_model(name_module_save)
    adam = optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=0.001, decay=0.0)
    model.compile(loss='mse', optimizer=adam)
-   model.fit_generator(train_generator, samples_per_epoch= len(train_samples), validation_data=validation_generator, nb_val_samples=len(validation_samples), nb_epoch = 2)
-   model.save('./modelmap2.h5')
+   model.fit_generator(train_generator, samples_per_epoch= len(train_samples), validation_data=validation_generator, nb_val_samples=len(validation_samples), nb_epoch = 5, callbacks=[checkpoint])
+   model.save(name_module_save)
+   print("name module save: ", name_module_save)
 else:
    print()
    print("Start training ...")
    model = Sequential()
-   model.add(Lambda(resize_images, input_shape=(160, 320, 3)))
-   model.add(Lambda(lambda x: x/127.5 - 1.0))
-   model.add(Cropping2D(cropping=((67,27), (0,0))))
-   model.add(Conv2D(24, 5, 5, activation='elu', subsample=(2, 2)))
-   model.add(Conv2D(36, 5, 5, activation='elu', subsample=(2, 2)))
-   model.add(Conv2D(48, 5, 5, activation='elu', subsample=(2, 2)))
-   model.add(Conv2D(64, 3, 3, activation='elu'))
-   model.add(Conv2D(64, 3, 3, activation='elu'))
-   model.add(Dropout(0.5))
+   model.add(Lambda(lambda x: x/127.5 - 1.,input_shape=(160, 320, 3)))
+   model.add(Cropping2D(cropping=((70,25), (0,0))))
+   model.add(AveragePooling2D(pool_size = (2,5)))
+   model.add(Convolution2D(32, 5, 5, subsample=(2, 2)))
+   model.add(Activation('elu'))
+   model.add(Convolution2D(48, 5, 5, subsample=(1, 1)))
+   model.add(Activation('elu'))
+   model.add(Convolution2D(64, 3, 3, subsample=(1, 1)))
+   model.add(Activation('elu'))
+   model.add(Convolution2D(96, 3, 3, subsample=(2, 2)))
+   model.add(Activation('elu'))
+   model.add(Convolution2D(128, 3, 3, subsample=(1, 1)))
+   model.add(Activation('elu'))
+   
    model.add(Flatten())
-   model.add(Dense(100, activation='elu'))
-   model.add(Dense(50, activation='elu'))
-   model.add(Dense(10, activation='elu'))
+   model.add(Dense(500))
+   model.add(Activation('elu'))
+   model.add(Dropout(0.4))
+   model.add(Dense(100))
+   model.add(Activation('elu'))
+   model.add(Dense(50))
+   model.add(Activation('elu'))
+   model.add(Dense(10))
+   model.add(Activation('elu'))
    model.add(Dense(1))
    model.summary()
-
-   adam = optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=0.001, decay=0.0)
-   model.compile(loss='mse', optimizer=adam)
-   model.fit_generator(train_generator, samples_per_epoch= len(train_samples), validation_data=validation_generator, nb_val_samples=len(validation_samples), nb_epoch=1)
-
-   model.save('./modelmap2.h5')
-print("save done.")
-"""
-#model = load_model("./modelmap2.h5")
-
-model = Sequential()
-#model.add(Lambda(resize_images, input_shape=input_shape))
-model.add(Lambda(lambda x: x/127.5 - 1.,input_shape=(160, 320, 3)))
-model.add(Cropping2D(cropping=((65,25), (0,0))))
-model.add(Convolution2D(24, 5, 5, border_mode="same", subsample=(2,2), activation="elu"))
-model.add(SpatialDropout2D(0.2))
-model.add(Convolution2D(36, 5, 5, border_mode="same", subsample=(2,2), activation="elu"))
-model.add(SpatialDropout2D(0.2))
-model.add(Convolution2D(48, 5, 5, border_mode="valid", subsample=(2,2), activation="elu"))
-model.add(SpatialDropout2D(0.2))
-model.add(Convolution2D(64, 3, 3, border_mode="valid", activation="elu"))
-model.add(SpatialDropout2D(0.2))
-model.add(Convolution2D(64, 3, 3, border_mode="valid", activation="elu"))
-model.add(SpatialDropout2D(0.2))
-
-model.add(Flatten())
-model.add(Dropout(0.5))
-model.add(Dense(100, activation="elu"))
-model.add(Dense(50, activation="elu"))
-model.add(Dense(10, activation="elu"))
-model.add(Dropout(0.5))
-model.add(Dense(1))
-model.summary()
-
-checkpoint = ModelCheckpoint('model-{epoch:03d}.h5',
+   
+   checkpoint = ModelCheckpoint('model-{epoch:03d}.h5',
                                  monitor='val_loss',
                                  verbose=0,
                                  save_best_only=True,
-                                 mode='auto')
-                                 
-adam = optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=0.001, decay=0.0)
-model.compile(loss='mse', optimizer=adam)
-model.fit_generator(train_generator, samples_per_epoch= len(train_samples), validation_data=validation_generator, nb_val_samples=len(validation_samples), nb_epoch=1, callbacks=[checkpoint])
+                                 mode='auto') 
+   adam = optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=0.001, decay=0.0)
+   model.compile(loss='mse', optimizer=adam)
+   model.fit_generator(train_generator, samples_per_epoch= len(train_samples), validation_data=validation_generator, nb_val_samples=len(validation_samples), nb_epoch=10, callbacks=[checkpoint])
+   model.save(name_module_save)
+   print("name module save: ", name_module_save)
 
-model.save('./modelmap2.h5')
-print("save done.")
-"""
